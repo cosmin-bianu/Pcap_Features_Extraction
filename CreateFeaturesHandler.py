@@ -28,9 +28,12 @@ class CreateFeaturesHandler():
 
     def compute_features(self, threads=1):
         rank = int(os.environ.get("SLURM_PROCID"))
-        total_tasks = int(os.environ.get("SLURM_NTASKS"))
-        
-        batch_size = total_tasks // rank
+        ntasks = int(os.environ.get("SLURM_NTASKS"))
+        malware_file_count = len(glob.glob("Pcaps_Malware/*.pcap"))
+        total_tasks = len(glob.glob("Pcaps_Legitimate/*.pcap")) + malware_file_count
+        batch_size = total_tasks // ntasks
+        start = rank*batch_size
+        end = (rank+1)*batch_size
         
         def malware_features():
             folder_name = "Pcaps_Malware"
@@ -72,9 +75,10 @@ class CreateFeaturesHandler():
                         filter_res.clear()
 
             pcaps = glob.glob(folder_name + "/" + "*.pcap")
-            pcaps = pcaps[rank*batch_size:min((rank+1)*batch_size, len(pcaps))]
-            with ThreadPoolExecutor(max_workers=threads) as executor:
-                executor.map(task, pcaps)
+            if start < len(pcaps):
+                pcaps = pcaps[start:min(end, len(pcaps))]
+                with ThreadPoolExecutor(max_workers=threads) as executor:
+                    executor.map(task, pcaps)
             
         def legitimate_features():
             folder_name = "Pcaps_Legitimate"
@@ -114,7 +118,9 @@ class CreateFeaturesHandler():
                     filter_res.clear()
                     
             pcaps = glob.glob(folder_name + "/" + "*.pcap")
-            pcaps = pcaps[rank*batch_size:min((rank+1)*batch_size, len(pcaps))]
+            end = end - malware_file_count
+            start = max(0, start-malware_file_count)
+            pcaps = pcaps[start, min(end, len(pcaps))]
             with ThreadPoolExecutor(max_workers=threads) as executor:
                 executor.map(task, pcaps)
 
