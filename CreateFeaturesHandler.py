@@ -5,6 +5,7 @@ from PacketFilter import PacketFilter
 from AttackerCalc import AttackerCalc
 import glob
 from concurrent.futures import ThreadPoolExecutor
+import os
 
 class CreateFeaturesHandler():
 
@@ -26,7 +27,11 @@ class CreateFeaturesHandler():
             self.csv.add_row(self.featuresCalc.get_features_name())
 
     def compute_features(self, threads=1):
-
+        rank = int(os.environ.get("SLURM_PROCID"))
+        total_tasks = int(os.environ.get("SLURM_NTASKS"))
+        
+        batch_size = total_tasks // rank
+        
         def malware_features():
             folder_name = "Pcaps_Malware"
             flow_type = "malware"
@@ -67,6 +72,7 @@ class CreateFeaturesHandler():
                         filter_res.clear()
 
             pcaps = glob.glob(folder_name + "/" + "*.pcap")
+            pcaps = pcaps[rank*batch_size:min((rank+1)*batch_size, len(pcaps))]
             with ThreadPoolExecutor(max_workers=threads) as executor:
                 executor.map(task, pcaps)
             
@@ -108,6 +114,7 @@ class CreateFeaturesHandler():
                     filter_res.clear()
                     
             pcaps = glob.glob(folder_name + "/" + "*.pcap")
+            pcaps = pcaps[rank*batch_size:min((rank+1)*batch_size, len(pcaps))]
             with ThreadPoolExecutor(max_workers=threads) as executor:
                 executor.map(task, pcaps)
 
